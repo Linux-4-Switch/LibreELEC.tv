@@ -5,9 +5,10 @@
 PKG_NAME="linux"
 PKG_LICENSE="GPL"
 PKG_SITE="http://www.kernel.org"
-PKG_DEPENDS_HOST="ccache:host rsync:host openssl:host"
-PKG_DEPENDS_TARGET="toolchain linux:host kmod:host xz:host keyutils $KERNEL_EXTRA_DEPENDS_TARGET"
-PKG_NEED_UNPACK="$LINUX_DEPENDS $(get_pkg_directory initramfs) $(get_pkg_variable initramfs PKG_NEED_UNPACK)"
+PKG_DEPENDS_HOST="ccache:host openssl:host"
+PKG_DEPENDS_TARGET="toolchain linux:host kmod:host xz:host wireless-regdb keyutils $KERNEL_EXTRA_DEPENDS_TARGET"
+PKG_DEPENDS_INIT="toolchain"
+PKG_NEED_UNPACK="$LINUX_DEPENDS $(get_pkg_directory busybox)"
 PKG_LONGDESC="This package contains a precompiled kernel image and the modules."
 PKG_IS_KERNEL_PKG="yes"
 PKG_STAMP="$KERNEL_TARGET $KERNEL_MAKE_EXTRACMD"
@@ -15,31 +16,49 @@ PKG_STAMP="$KERNEL_TARGET $KERNEL_MAKE_EXTRACMD"
 PKG_PATCH_DIRS="$LINUX"
 
 case "$LINUX" in
-  amlogic)
-    PKG_VERSION="7c53f6b671f4aba70ff15e1b05148b10d58c2837" # 5.11-rc3
-    PKG_SHA256="30206f178c9c151a0c387c7967800bc0bf89a893958241a3add0098d443f323a"
-    PKG_URL="https://github.com/torvalds/linux/archive/$PKG_VERSION.tar.gz"
+  rockchip-4.4)
+    PKG_VERSION="8394b6656aeea884ae576a85c11d6280595445fd"
+    PKG_URL="https://github.com/mrfixit2001/rockchip-kernel/archive/$PKG_VERSION.tar.gz"
+    PKG_SOURCE_NAME="linux-$LINUX-$PKG_VERSION.tar.gz"
+    ;;
+  odroidgoA-4.4)
+    PKG_VERSION="3e230d424b823267fec12d003d5ca36b3f694229"
+    PKG_SHA256="ec193f88820d1b3b2ff1478df790381f7efbb04cee0062fc91f8f76d52de4dcc"
+    PKG_URL="https://github.com/hardkernel/linux/archive/$PKG_VERSION.tar.gz"
     PKG_SOURCE_NAME="linux-$LINUX-$PKG_VERSION.tar.gz"
     ;;
   raspberrypi)
-    PKG_VERSION="e9505f4612646533f53813aabef5ca040b0ea49d" # 5.10.7
-    PKG_SHA256="2d6e3637dbe328161161cbdede2902e0aaaa979bd0179a40e14d2960a61de593"
+    PKG_VERSION="edc21a35b9b7b427716564c3b744ed2a89fcd19a" # 5.4.71
+    PKG_SHA256="bce0429841ef280d5ae991a261954f90ad6de35a091b59714f1535c8d1f3334e"
     PKG_URL="https://github.com/raspberrypi/linux/archive/$PKG_VERSION.tar.gz"
     PKG_SOURCE_NAME="linux-$LINUX-$PKG_VERSION.tar.gz"
+    PKG_PATCH_DIRS="rpi"
     ;;
+  odroidxu3-5.4)
+    PKG_VERSION="5e12d570f207e48f321029b15026ae7c4ab21217"
+    PKG_URL="https://github.com/hardkernel/linux/archive/$PKG_VERSION.tar.gz"
+    ;;
+  mainline-5.10)
+    PKG_VERSION="5.10.2"
+    PKG_SHA256="3b84e13abae26af17ebccc4d7212f5843a991127a73a320848d5c6942ef781a2"
+    PKG_URL="https://www.kernel.org/pub/linux/kernel/v5.x/$PKG_NAME-$PKG_VERSION.tar.xz"
+    PKG_PATCH_DIRS="default"
+    ;;
+  switch)
+    PKG_VERSION="switch"
+    PKG_URL="https://gitlab.com/Azkali/l4t-kernel-4.9/-/archive/$PKG_VERSION/l4t-kernel-4.9-$PKG_VERSION.tar.gz"
+    PKG_PATCH_DIRS=""
+    ;;
+
   *)
-    PKG_VERSION="5.10.4"
-    PKG_SHA256="904e396c26e9992a16cd1cc989460171536bed7739bf36049f6eb020ee5d56ec"
+    PKG_VERSION="5.1.18"
+    PKG_SHA256="6013e7dcf59d7c1b168d8edce3dbd61ce340ff289541f920dbd0958bef98f36a"
     PKG_URL="https://www.kernel.org/pub/linux/kernel/v5.x/$PKG_NAME-$PKG_VERSION.tar.xz"
     PKG_PATCH_DIRS="default"
     ;;
 esac
 
 PKG_KERNEL_CFG_FILE=$(kernel_config_path) || die
-
-if listcontains "${UBOOT_FIRMWARE}" "crust"; then
-  PKG_PATCH_DIRS+=" crust"
-fi
 
 if [ -n "$KERNEL_TOOLCHAIN" ]; then
   PKG_DEPENDS_HOST="$PKG_DEPENDS_HOST gcc-arm-$KERNEL_TOOLCHAIN:host"
@@ -52,98 +71,120 @@ if [ "$PKG_BUILD_PERF" != "no" ] && grep -q ^CONFIG_PERF_EVENTS= $PKG_KERNEL_CFG
   PKG_DEPENDS_TARGET="$PKG_DEPENDS_TARGET binutils elfutils libunwind zlib openssl"
 fi
 
-if [ "$TARGET_ARCH" = "x86_64" ]; then
-  PKG_DEPENDS_TARGET="$PKG_DEPENDS_TARGET elfutils:host pciutils"
-  PKG_DEPENDS_UNPACK+=" intel-ucode kernel-firmware"
+if [ "$TARGET_ARCH" = "x86_64" -o "$TARGET_ARCH" = "i386" ]; then
+  PKG_DEPENDS_TARGET="$PKG_DEPENDS_TARGET intel-ucode:host kernel-firmware elfutils:host pciutils"
 elif [ "$TARGET_ARCH" = "arm" -a "$DEVICE" = "iMX6" ]; then
-  PKG_DEPENDS_UNPACK+=" firmware-imx"
+  PKG_DEPENDS_TARGET="$PKG_DEPENDS_TARGET kernel-firmware"
+elif [ "$TARGET_ARCH" = "aarch64" ] && [ "$DEVICE" = "Switch" ]; then
+  PKG_DEPENDS_HOST="$PKG_DEPENDS_HOST gcc-linaro-aarch64-linux-gnu:host"
+  PKG_DEPENDS_TARGET="$PKG_DEPENDS_TARGET gcc-linaro-aarch64-linux-gnu:host"
+  export PATH=$TOOLCHAIN/lib/gcc-linaro-aarch64-linux-gnu/bin/:$PATH
+  TARGET_PREFIX=aarch64-linux-gnu-
+  OLD_CROSS_COMPILE=$CROSS_COMPILE
+  export CROSS_COMPILE=$TARGET_PREFIX # necessary for Linux 5
+  PKG_MAKE_OPTS_HOST="ARCH=$TARGET_ARCH headers_check"
 fi
 
 if [[ "$KERNEL_TARGET" = uImage* ]]; then
   PKG_DEPENDS_TARGET="$PKG_DEPENDS_TARGET u-boot-tools:host"
 fi
 
-# Ensure that the dependencies of initramfs:target are built correctly, but
-# we don't want to add initramfs:target as a direct dependency as we install
-# this "manually" from within linux:target
-for pkg in $(get_pkg_variable initramfs PKG_DEPENDS_TARGET); do
-  ! listcontains "${PKG_DEPENDS_TARGET}" "${pkg}" && PKG_DEPENDS_TARGET+=" ${pkg}" || true
-done
-
 post_patch() {
-  # linux was already built and its build dir autoremoved - prepare it again for kernel packages
-  if [ -d $PKG_INSTALL/.image ]; then
-    cp -p $PKG_INSTALL/.image/.config $PKG_BUILD
-    kernel_make -C $PKG_BUILD prepare
+  cp $PKG_KERNEL_CFG_FILE $PKG_BUILD/.config
 
-    # restore the required Module.symvers from an earlier build
-    cp -p $PKG_INSTALL/.image/Module.symvers $PKG_BUILD
-  else
-    cp $PKG_KERNEL_CFG_FILE $PKG_BUILD/.config
+  sed -i -e "s|^CONFIG_INITRAMFS_SOURCE=.*$|CONFIG_INITRAMFS_SOURCE=\"$(kernel_initramfs_confs) $BUILD/initramfs\"|" $PKG_BUILD/.config
+  sed -i -e "/CONFIG_INITRAMFS_ROOT_UID/d" -e "/CONFIG_INITRAMFS_ROOT_GID/d" -e "/CONFIG_INITRAMFS_SOURCE=.../a CONFIG_INITRAMFS_ROOT_UID=0\nCONFIG_INITRAMFS_ROOT_GID=0" $PKG_BUILD/.config
 
-    sed -i -e "s|@INITRAMFS_SOURCE@|$(kernel_initramfs_confs) $BUILD/initramfs|" $PKG_BUILD/.config
+  # set default hostname based on $DISTRONAME
+  sed -i -e "s|@DISTRONAME@|$DISTRONAME|g" $PKG_BUILD/.config
 
-    # set default hostname based on $DISTRONAME
-      sed -i -e "s|@DISTRONAME@|$DISTRONAME|g" $PKG_BUILD/.config
-
-    # disable swap support if not enabled
-    if [ ! "$SWAP_SUPPORT" = yes ]; then
-      sed -i -e "s|^CONFIG_SWAP=.*$|# CONFIG_SWAP is not set|" $PKG_BUILD/.config
-    fi
-
-    # disable nfs support if not enabled
-    if [ ! "$NFS_SUPPORT" = yes ]; then
-      sed -i -e "s|^CONFIG_NFS_FS=.*$|# CONFIG_NFS_FS is not set|" $PKG_BUILD/.config
-    fi
-
-    # disable cifs support if not enabled
-    if [ ! "$SAMBA_SUPPORT" = yes ]; then
-      sed -i -e "s|^CONFIG_CIFS=.*$|# CONFIG_CIFS is not set|" $PKG_BUILD/.config
-    fi
-
-    # disable iscsi support if not enabled
-    if [ ! "$ISCSI_SUPPORT" = yes ]; then
-      sed -i -e "s|^CONFIG_SCSI_ISCSI_ATTRS=.*$|# CONFIG_SCSI_ISCSI_ATTRS is not set|" $PKG_BUILD/.config
-      sed -i -e "s|^CONFIG_ISCSI_TCP=.*$|# CONFIG_ISCSI_TCP is not set|" $PKG_BUILD/.config
-      sed -i -e "s|^CONFIG_ISCSI_BOOT_SYSFS=.*$|# CONFIG_ISCSI_BOOT_SYSFS is not set|" $PKG_BUILD/.config
-      sed -i -e "s|^CONFIG_ISCSI_IBFT_FIND=.*$|# CONFIG_ISCSI_IBFT_FIND is not set|" $PKG_BUILD/.config
-      sed -i -e "s|^CONFIG_ISCSI_IBFT=.*$|# CONFIG_ISCSI_IBFT is not set|" $PKG_BUILD/.config
-    fi
-
-    # disable lima/panfrost if libmali is configured
-    if [ "$OPENGLES" = "libmali" ]; then
-      sed -e "s|^CONFIG_DRM_LIMA=.*$|# CONFIG_DRM_LIMA is not set|" -i $PKG_BUILD/.config
-      sed -e "s|^CONFIG_DRM_PANFROST=.*$|# CONFIG_DRM_PANFROST is not set|" -i $PKG_BUILD/.config
-    fi
-
-    # disable wireguard support if not enabled
-    if [ ! "$WIREGUARD_SUPPORT" = yes ]; then
-      sed -e "s|^CONFIG_WIREGUARD=.*$|# CONFIG_WIREGUARD is not set|" -i $PKG_BUILD/.config
-    fi
+  # disable swap support if not enabled
+  if [ ! "$SWAP_SUPPORT" = yes ]; then
+    sed -i -e "s|^CONFIG_SWAP=.*$|# CONFIG_SWAP is not set|" $PKG_BUILD/.config
   fi
+
+  # disable nfs support if not enabled
+  if [ ! "$NFS_SUPPORT" = yes ]; then
+    sed -i -e "s|^CONFIG_NFS_FS=.*$|# CONFIG_NFS_FS is not set|" $PKG_BUILD/.config
+  fi
+
+  # disable cifs support if not enabled
+  if [ ! "$SAMBA_SUPPORT" = yes ]; then
+    sed -i -e "s|^CONFIG_CIFS=.*$|# CONFIG_CIFS is not set|" $PKG_BUILD/.config
+  fi
+
+  # disable iscsi support if not enabled
+  if [ ! "$ISCSI_SUPPORT" = yes ]; then
+    sed -i -e "s|^CONFIG_SCSI_ISCSI_ATTRS=.*$|# CONFIG_SCSI_ISCSI_ATTRS is not set|" $PKG_BUILD/.config
+    sed -i -e "s|^CONFIG_ISCSI_TCP=.*$|# CONFIG_ISCSI_TCP is not set|" $PKG_BUILD/.config
+    sed -i -e "s|^CONFIG_ISCSI_BOOT_SYSFS=.*$|# CONFIG_ISCSI_BOOT_SYSFS is not set|" $PKG_BUILD/.config
+    sed -i -e "s|^CONFIG_ISCSI_IBFT_FIND=.*$|# CONFIG_ISCSI_IBFT_FIND is not set|" $PKG_BUILD/.config
+    sed -i -e "s|^CONFIG_ISCSI_IBFT=.*$|# CONFIG_ISCSI_IBFT is not set|" $PKG_BUILD/.config
+  fi
+
+  # install extra dts files
+  for f in $PROJECT_DIR/$PROJECT/config/*-overlay.dts; do
+    [ -f "$f" ] && cp -v $f $PKG_BUILD/arch/$TARGET_KERNEL_ARCH/boot/dts/overlays || true
+  done
+  if [ -n "$DEVICE" ]; then
+    for f in $PROJECT_DIR/$PROJECT/devices/$DEVICE/config/*-overlay.dts; do
+      [ -f "$f" ] && cp -v $f $PKG_BUILD/arch/$TARGET_KERNEL_ARCH/boot/dts/overlays || true
+    done
+  fi
+
+  #host gcc 10 build issue
+  sed -i '/YYLTYPE yylloc/d' $PKG_BUILD/scripts/dtc/dtc-lexer.l
+
 }
 
 make_host() {
-  make \
-    ARCH=${HEADERS_ARCH:-$TARGET_KERNEL_ARCH} \
-    HOSTCC="$TOOLCHAIN/bin/host-gcc" \
-    HOSTCXX="$TOOLCHAIN/bin/host-g++" \
-    HOSTCFLAGS="$HOST_CFLAGS" \
-    HOSTCXXFLAGS="$HOST_CXXFLAGS" \
-    HOSTLDFLAGS="$HOST_LDFLAGS" \
-    headers_check
+  if [ "$DEVICE" = "Switch" ]; then
+    cp arch/arm64/configs/tegra_linux_defconfig .config
+    make \
+      ARCH=arm64 \
+      CROSS_COMPILE=$TARGET_PREFIX \
+      olddefconfig
+     make \
+       ARCH=arm64 \
+       CROSS_COMPILE=$TARGET_PREFIX \
+       prepare
+     make \
+       ARCH=arm64 \
+       CROSS_COMPILE=$TARGET_PREFIX \
+       modules_prepare
+     make \
+       ARCH=arm64 \
+       headers_check
+  else
+    make \
+      ARCH=${HEADERS_ARCH:-$TARGET_KERNEL_ARCH} \
+      HOSTCC="$TOOLCHAIN/bin/host-gcc" \
+      HOSTCXX="$TOOLCHAIN/bin/host-g++" \
+      HOSTCFLAGS="$HOST_CFLAGS" \
+      HOSTCXXFLAGS="$HOST_CXXFLAGS" \
+      HOSTLDFLAGS="$HOST_LDFLAGS" \
+      headers_check
+  fi
 }
 
 makeinstall_host() {
-  make \
-    ARCH=${HEADERS_ARCH:-$TARGET_KERNEL_ARCH} \
-    HOSTCC="$TOOLCHAIN/bin/host-gcc" \
-    HOSTCXX="$TOOLCHAIN/bin/host-g++" \
-    HOSTCFLAGS="$HOST_CFLAGS" \
-    HOSTCXXFLAGS="$HOST_CXXFLAGS" \
-    HOSTLDFLAGS="$HOST_LDFLAGS" \
-    INSTALL_HDR_PATH=dest \
-    headers_install
+  if [ "$DEVICE" = "Switch" ]; then
+    make \
+      ARCH=arm64 \
+      CROSS_COMPILE=$TARGET_PREFIX \
+      INSTALL_HDR_PATH=dest \
+      headers_install
+  else
+    make \
+      ARCH=${HEADERS_ARCH:-$TARGET_KERNEL_ARCH} \
+      HOSTCC="$TOOLCHAIN/bin/host-gcc" \
+      HOSTCXX="$TOOLCHAIN/bin/host-g++" \
+      HOSTCFLAGS="$HOST_CFLAGS" \
+      HOSTCXXFLAGS="$HOST_CXXFLAGS" \
+      HOSTLDFLAGS="$HOST_LDFLAGS" \
+      INSTALL_HDR_PATH=dest \
+      headers_install
+  fi
   mkdir -p $SYSROOT_PREFIX/usr/include
     cp -R dest/include/* $SYSROOT_PREFIX/usr/include
 }
@@ -151,32 +192,39 @@ makeinstall_host() {
 pre_make_target() {
   ( cd $ROOT
     rm -rf $BUILD/initramfs
-    rm -f ${STAMPS_INSTALL}/initramfs/install_target ${STAMPS_INSTALL}/*/install_init
     $SCRIPTS/install initramfs
   )
   pkg_lock_status "ACTIVE" "linux:target" "build"
 
-  if [ "$TARGET_ARCH" = "x86_64" ]; then
+  if [ "$TARGET_ARCH" = "x86_64" -o "$TARGET_ARCH" = "i386" ]; then
     # copy some extra firmware to linux tree
     mkdir -p $PKG_BUILD/external-firmware
-      cp -a $(get_build_dir kernel-firmware)/.copied-firmware/{amdgpu,amd-ucode,i915,radeon,e100,rtl_nic} $PKG_BUILD/external-firmware
-
-    cp -a $(get_build_dir intel-ucode)/intel-ucode $PKG_BUILD/external-firmware
-
-    FW_LIST="$(find $PKG_BUILD/external-firmware \( -type f -o -type l \) \( -iname '*.bin' -o -iname '*.fw' -o -path '*/intel-ucode/*' \) | sed 's|.*external-firmware/||' | sort | xargs)"
-    sed -i "s|CONFIG_EXTRA_FIRMWARE=.*|CONFIG_EXTRA_FIRMWARE=\"${FW_LIST}\"|" $PKG_BUILD/.config
-
+      cp -a $(get_build_dir kernel-firmware)/{amdgpu,amd-ucode,i915,nvidia,radeon,e100,rtl_nic} $PKG_BUILD/external-firmware
+      cp -a $(get_build_dir intel-ucode)/intel-ucode $PKG_BUILD/external-firmware
   elif [ "$TARGET_ARCH" = "arm" -a "$DEVICE" = "iMX6" ]; then
-    mkdir -p $PKG_BUILD/external-firmware/imx/sdma
-      cp -a $(get_build_dir firmware-imx)/firmware/sdma/*imx6*.bin $PKG_BUILD/external-firmware/imx/sdma
-      cp -a $(get_build_dir firmware-imx)/firmware/vpu/*imx6*.bin $PKG_BUILD/external-firmware
-
-    FW_LIST="$(find $PKG_BUILD/external-firmware -type f | sed 's|.*external-firmware/||' | sort | xargs)"
-    sed -i -e "s|^CONFIG_EXTRA_FIRMWARE=.*$|CONFIG_EXTRA_FIRMWARE=\"${FW_LIST}\"|" $PKG_BUILD/.config
-    sed -i -e "/CONFIG_EXTRA_FIRMWARE_DIR/d" -e "/CONFIG_EXTRA_FIRMWARE=.../a CONFIG_EXTRA_FIRMWARE_DIR=\"external-firmware\"" $PKG_BUILD/.config
+      mkdir -p $PKG_BUILD/external-firmware
+        cp -a $(get_build_dir kernel-firmware)/imx $PKG_BUILD/external-firmware
   fi
 
-  kernel_make oldconfig
+  if [ -d $PKG_BUILD/external-firmware/ ]; then
+    FW_LIST="$(find $PKG_BUILD/external-firmware \( -type f -o -type l \) \( -iname '*.bin' -o -iname '*.fw' -o -path '*/intel-ucode/*' \) | sed 's|.*external-firmware/||' | sort | xargs)"
+    sed -i "s|CONFIG_EXTRA_FIRMWARE=.*|CONFIG_EXTRA_FIRMWARE=\"${FW_LIST}\"|" $PKG_BUILD/.config
+    sed -i -e "/CONFIG_EXTRA_FIRMWARE_DIR/d" -e "/CONFIG_EXTRA_FIRMWARE=.../a CONFIG_EXTRA_FIRMWARE_DIR=\"external-firmware\"" $PKG_BUILD/.config
+  fi
+  if [ "$DEVICE" = "Switch" ]; then
+    kernel_make clean
+    cp arch/arm64/configs/tegra_linux_defconfig .config
+    kernel_make olddefconfig
+    kernel_make prepare
+    kernel_make modules_prepare
+  else
+    kernel_make olddefconfig
+  fi
+
+  # regdb (backward compatability with pre-4.15 kernels)
+  if grep -q ^CONFIG_CFG80211_INTERNAL_REGDB= $PKG_BUILD/.config ; then
+    cp $(get_build_dir wireless-regdb)/db.txt $PKG_BUILD/net/wireless/db.txt
+  fi
 }
 
 make_target() {
@@ -189,6 +237,10 @@ make_target() {
     KERNEL_UIMAGE_TARGET="$KERNEL_TARGET"
     KERNEL_TARGET="${KERNEL_TARGET/uImage/Image}"
   fi
+  
+  if [ "$DEVICE" = "Switch" ]; then
+     export KCFLAGS+="-Wno-error=sizeof-pointer-memaccess -Wno-error=missing-attributes -Wno-error=stringop-truncation -Wno-error=stringop-overflow= -Wno-error=address-of-packed-member -Wno-error=tautological-compare"
+  fi
 
   kernel_make $KERNEL_TARGET $KERNEL_MAKE_EXTRACMD modules
 
@@ -197,7 +249,7 @@ make_target() {
 
       # arch specific perf build args
       case "$TARGET_ARCH" in
-        x86_64)
+        x86_64|i386)
           PERF_BUILD_ARGS="ARCH=x86"
           ;;
         aarch64)
@@ -228,7 +280,7 @@ make_target() {
   if [ -n "$KERNEL_UIMAGE_TARGET" ] ; then
     # determine compression used for kernel image
     KERNEL_UIMAGE_COMP=${KERNEL_UIMAGE_TARGET:7}
-    KERNEL_UIMAGE_COMP=$(echo ${KERNEL_UIMAGE_COMP:-none} | sed 's/gz/gzip/; s/bz2/bzip2/')
+    KERNEL_UIMAGE_COMP=${KERNEL_UIMAGE_COMP:-none}
 
     # calculate new load address to make kernel Image unpack to memory area after compressed image
     if [ "$KERNEL_UIMAGE_COMP" != "none" ] ; then
@@ -256,9 +308,6 @@ make_target() {
 }
 
 makeinstall_target() {
-  mkdir -p $INSTALL/.image
-  cp -p arch/${TARGET_KERNEL_ARCH}/boot/${KERNEL_TARGET} System.map .config Module.symvers $INSTALL/.image/
-
   kernel_make INSTALL_MOD_PATH=$INSTALL/$(get_kernel_overlay_dir) modules_install
   rm -f $INSTALL/$(get_kernel_overlay_dir)/lib/modules/*/build
   rm -f $INSTALL/$(get_kernel_overlay_dir)/lib/modules/*/source
@@ -275,14 +324,26 @@ makeinstall_target() {
 
     # install platform dtbs, but remove upstream kernel dtbs (i.e. without downstream
     # drivers and decent USB support) as these are not required by LibreELEC
-    cp -p arch/$TARGET_KERNEL_ARCH/boot/dts/*.dtb $INSTALL/usr/share/bootloader
+    if [ "$PROJECT" = "RPi" -a "$ARCH" = "aarch64" ]; then
+      cp -p arch/$TARGET_KERNEL_ARCH/boot/dts/broadcom/*.dtb $INSTALL/usr/share/bootloader
+    else  
+      cp -p arch/$TARGET_KERNEL_ARCH/boot/dts/*.dtb $INSTALL/usr/share/bootloader
+    fi
     rm -f $INSTALL/usr/share/bootloader/bcm283*.dtb
 
     # install overlay dtbs
-    for dtb in arch/$TARGET_KERNEL_ARCH/boot/dts/overlays/*.dtb \
-               arch/$TARGET_KERNEL_ARCH/boot/dts/overlays/*.dtbo; do
+    for dtb in arch/$TARGET_KERNEL_ARCH/boot/dts/overlays/*.dtbo; do
       cp $dtb $INSTALL/usr/share/bootloader/overlays 2>/dev/null || :
     done
     cp -p arch/$TARGET_KERNEL_ARCH/boot/dts/overlays/README $INSTALL/usr/share/bootloader/overlays
   fi
+}
+
+post_install() {
+  mkdir -p $INSTALL/$(get_full_firmware_dir)/
+
+  # regdb and signature is now loaded as firmware by 4.15+
+    if grep -q ^CONFIG_CFG80211_REQUIRE_SIGNED_REGDB= $PKG_BUILD/.config; then
+      cp $(get_build_dir wireless-regdb)/regulatory.db{,.p7s} $INSTALL/$(get_full_firmware_dir)
+    fi
 }
